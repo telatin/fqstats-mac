@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+   Info.plist
+   FqTest
+
+   Created by Andrea Telatin (QIB) on 05/11/2024.
+   Copyright (c) 2024 ___ORGANIZATIONNAME___. All rights reserved.
+-->
+<key>UTExportedTypeDeclarations</key>
+<array>
+    <dict>
+        <key>UTTypeIdentifier</key>
+        <string>com.bioinformatics.fasta</string>
+        <key>UTTypeDescription</key>
+        <string>FASTA Sequence File</string>
+        <key>UTTypeConformsTo</key>
+        <array>
+            <string>public.text</string>
+            <string>public.data</string>
+        </array>
+        <key>UTTypeTagSpecification</key>
+        <dict>
+            <key>public.filename-extension</key>
+            <array>
+                <string>fasta</string>
+                <string>fa</string>
+            </array>
+        </dict>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key>
+        <string>com.bioinformatics.fastq</string>
+        <key>UTTypeDescription</key>
+        <string>FASTQ Sequence File</string>
+        <key>UTTypeConformsTo</key>
+        <array>
+            <string>public.text</string>
+            <string>public.data</string>
+        </array>
+        <key>UTTypeTagSpecification</key>
+        <dict>
+            <key>public.filename-extension</key>
+            <array>
+                <string>fastq</string>
+                <string>fq</string>
+            </array>
+        </dict>
+    </dict>
+</array>
+<plist version="1.0">
+<dict/>
+</plist>
