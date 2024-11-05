@@ -79,7 +79,7 @@ struct ContentView: View {
                 // Stats display
                 if fileProcessor.stats.totalSequences > 0 {
                     StatsView(stats: fileProcessor.stats)
-                        .frame(maxHeight: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)  // This makes it fit the content
                 }
                 
                 Spacer()
@@ -113,83 +113,139 @@ struct ContentView: View {
 // MARK: - Stats View
 struct StatsView: View {
     let stats: SequenceStats
-    @Environment(\.colorScheme) var colorScheme // For better color adaptation
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(alignment: .leading, spacing: geometry.size.height * 0.03) {
-                    // Header
-                    Text("Sequence Statistics")
-                        .font(.system(size: min(geometry.size.width * 0.05, 40)))
-                        .fontWeight(.bold)
-                        .padding(.bottom, geometry.size.height * 0.02)
-                    
-                    // Stats Grid
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(minimum: geometry.size.width * 0.3)),
-                            GridItem(.flexible(minimum: geometry.size.width * 0.3))
-                        ],
-                        alignment: .leading,
-                        spacing: geometry.size.height * 0.03
-                    ) {
-                        ResponsiveStatRow(
-                            label: "Filename",
-                            value: stats.filename,
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "Total Sequences",
-                            value: "\(stats.totalSequences)",
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "Total Bases",
-                            value: formatNumber(stats.totalBases),
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "N50",
-                            value: formatNumber(stats.n50),
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "Average Length",
-                            value: formatNumber(Int(stats.averageLength)),
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "Longest Sequence",
-                            value: formatNumber(stats.longestSequence),
-                            geometry: geometry
-                        )
-                        ResponsiveStatRow(
-                            label: "Shortest Sequence",
-                            value: stats.shortestSequence == Int.max ? "N/A" : formatNumber(stats.shortestSequence),
-                            geometry: geometry
-                        )
-                    }
-                }
-                .padding(geometry.size.width * 0.03)
-                .frame(minHeight: geometry.size.height)
-                .background(
-                    RoundedRectangle(cornerRadius: 15)
-                        .fill(colorScheme == .dark ? Color(.windowBackgroundColor).opacity(0.3) : Color(.windowBackgroundColor).opacity(0.5))
-                        .shadow(radius: 5)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Sequence Statistics")
+                .font(.title2)
+                .fontWeight(.bold)
+                .padding(.bottom, 4)
+            
+            VStack(alignment: .leading, spacing: 16) {
+                StatPair(
+                    leftLabel: "Filename",
+                    leftValue: stats.filename,
+                    rightLabel: "Total Sequences",
+                    rightValue: "\(stats.totalSequences)"
                 )
-                .padding(geometry.size.width * 0.02)
+                
+                StatPair(
+                    leftLabel: "Total Bases",
+                    leftValue: formatNumber(stats.totalBases),
+                    rightLabel: "N50",
+                    rightValue: formatNumber(stats.n50)
+                )
+                
+                StatPair(
+                    leftLabel: "Average Length",
+                    leftValue: formatNumber(Int(stats.averageLength)),
+                    rightLabel: "Longest Sequence",
+                    rightValue: formatNumber(stats.longestSequence)
+                )
+                
+                StatPair(
+                    leftLabel: "Shortest Sequence",
+                    leftValue: stats.shortestSequence == Int.max ? "N/A" : formatNumber(stats.shortestSequence),
+                    rightLabel: "",
+                    rightValue: ""
+                )
             }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(colorScheme == .dark ?
+                      Color(.windowBackgroundColor).opacity(0.3) :
+                      Color(.windowBackgroundColor).opacity(0.5))
+        )
+        .padding(.horizontal)
     }
     
-    // Helper function to format large numbers with commas
     private func formatNumber(_ number: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = ","
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
+}
+
+
+struct StatPair: View {
+    let leftLabel: String
+    let leftValue: String
+    let rightLabel: String
+    let rightValue: String
+    
+    var body: some View {
+        HStack(alignment: .top) {
+            StatItem(label: leftLabel, value: leftValue)
+            Spacer()
+            if !rightLabel.isEmpty {
+                StatItem(label: rightLabel, value: rightValue)
+            }
+        }
+    }
+}
+
+struct StatItem: View {
+    let label: String
+    let value: String
+    @State private var showCopied = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .foregroundColor(.secondary)
+                .font(.callout)
+            HStack {
+                Text(value)
+                    .font(.body)
+                    .fontWeight(.medium)
+                if showCopied {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.green)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())  // Makes the entire area clickable
+        .onTapGesture {
+            copyToClipboard()
+        }
+        .help("Click to copy \(label): \(value)")  // Shows tooltip on hover
+    }
+    
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        
+        withAnimation {
+            showCopied = true
+        }
+        
+        // Hide the checkmark after 1.5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopied = false
+            }
+        }
+    }
+}
+
+#Preview {
+    StatsView(stats: SequenceStats(
+        filename: "sample.fastq.gz",
+        totalSequences: 1234567,
+        totalBases: 987654321,
+        averageLength: 123.45,
+        longestSequence: 54321,
+        shortestSequence: 12,
+        n50: 45678
+    ))
+    .padding()
 }
 
 // Responsive stat row component
