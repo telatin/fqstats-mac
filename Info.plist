@@ -7,6 +7,23 @@
    Created by Andrea Telatin (QIB) on 05/11/2024.
    Copyright (c) 2024 ___ORGANIZATIONNAME___. All rights reserved.
 -->
+<key>CFBundleDocumentTypes</key>
+<array>
+    <dict>
+        <key>CFBundleTypeName</key>
+        <string>FASTA/FASTQ Files</string>
+        <key>LSHandlerRank</key>
+        <string>Default</string>
+        <key>LSItemContentTypes</key>
+        <array>
+            <string>public.text</string>
+            <string>public.data</string>
+            <string>com.bioinformatics.fasta</string>
+            <string>com.bioinformatics.fastq</string>
+        </array>
+    </dict>
+</array>
+
 <key>UTExportedTypeDeclarations</key>
 <array>
     <dict>
@@ -48,6 +65,10 @@
         </dict>
     </dict>
 </array>
+
+<key>LSSupportsOpeningDocumentsInPlace</key>
+<true/>
+
 <plist version="1.0">
 <dict/>
 </plist>

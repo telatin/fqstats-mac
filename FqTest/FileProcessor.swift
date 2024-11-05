@@ -1,14 +1,17 @@
 import SwiftUI
 import Gzip
 
+
 struct SequenceStats {
+    var filename: String = ""
     var totalSequences: Int = 0
     var totalBases: Int = 0
-    var gcContent: Double = 0.0
     var averageLength: Double = 0.0
     var longestSequence: Int = 0
     var shortestSequence: Int = Int.max
+    var n50: Int = 0
 }
+
 
 class FileProcessor: ObservableObject {
     @Published var stats = SequenceStats()
@@ -18,6 +21,7 @@ class FileProcessor: ObservableObject {
     func processFile(url: URL) {
         isProcessing = true
         error = nil
+        let filename = url.lastPathComponent
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
@@ -38,7 +42,7 @@ class FileProcessor: ObservableObject {
                 
                 // Convert to string and process
                 if let content = String(data: decompressedData, encoding: .ascii) {
-                    self?.processContent(content)
+                    self?.processContent(content, filename: filename)
                 } else {
                     throw NSError(domain: "FileProcessing", code: 3,
                                 userInfo: [NSLocalizedDescriptionKey: "Failed to decode file content"])
@@ -46,24 +50,25 @@ class FileProcessor: ObservableObject {
                 
             } catch {
                 DispatchQueue.main.async {
-                    self?.error = error.localizedDescription
+                    self?.error = "Error processing \(filename): \(error.localizedDescription)"
                     self?.isProcessing = false
                 }
             }
         }
     }
     
-    private func processContent(_ content: String) {
+    private func processContent(_ content: String, filename: String) {
         let lines = content.components(separatedBy: .newlines)
         guard !lines.isEmpty else {
             DispatchQueue.main.async { [weak self] in
-                self?.error = "File is empty"
+                self?.error = "File is empty: \(filename)"
                 self?.isProcessing = false
             }
             return
         }
         
         var stats = SequenceStats()
+        stats.filename = filename
         var sequences: [String] = []
         var currentSequence = ""
         let isFastq = lines[0].hasPrefix("@")
@@ -98,21 +103,30 @@ class FileProcessor: ObservableObject {
             }
         }
         
-        // Calculate stats
+        // Calculate basic stats
         stats.totalSequences = sequences.count
         
-        for sequence in sequences {
-            let length = sequence.count
-            stats.totalBases += length
-            stats.longestSequence = max(stats.longestSequence, length)
-            stats.shortestSequence = min(stats.shortestSequence, length)
-            
-            let gcCount = sequence.filter { "GCgc".contains($0) }.count
-            stats.gcContent = (Double(gcCount) / Double(stats.totalBases)) * 100
-        }
+        // Get all sequence lengths for N50 calculation
+        var lengths = sequences.map { $0.count }
+        stats.totalBases = lengths.reduce(0, +)
+        stats.longestSequence = lengths.max() ?? 0
+        stats.shortestSequence = lengths.min() ?? 0
         
         if stats.totalSequences > 0 {
             stats.averageLength = Double(stats.totalBases) / Double(stats.totalSequences)
+            
+            // Calculate N50
+            lengths.sort(by: >)  // Sort in descending order
+            var runningSum = 0
+            let halfTotalLength = stats.totalBases / 2
+            
+            for length in lengths {
+                runningSum += length
+                if runningSum >= halfTotalLength {
+                    stats.n50 = length
+                    break
+                }
+            }
         }
         
         DispatchQueue.main.async { [weak self] in

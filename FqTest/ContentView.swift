@@ -7,89 +7,96 @@ struct ContentView: View {
     @State private var isDropTargeted = false
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Drag and Drop Area
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [10]))
-                    .foregroundColor(isDropTargeted ? .blue : .gray)
-                    .frame(height: 200)
-                    .animation(.default, value: isDropTargeted)
-                
-                VStack(spacing: 12) {
-                    Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: 40))
+        GeometryReader { geometry in
+            VStack(spacing: geometry.size.height * 0.03) {
+                // Drag and Drop Area
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(style: StrokeStyle(lineWidth: 2, dash: [10]))
                         .foregroundColor(isDropTargeted ? .blue : .gray)
+                        .frame(height: geometry.size.height * 0.25)
+                        .animation(.default, value: isDropTargeted)
                     
-                    Text("Drop FASTQ/FASTA files here")
-                        .font(.headline)
-                    
-                    Text("or")
-                        .foregroundColor(.secondary)
-                    
-                    Button("Select File") {
-                        isShowingFileImporter = true
+                    VStack(spacing: geometry.size.height * 0.02) {
+                        Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "arrow.down.circle")
+                            .font(.system(size: min(geometry.size.width * 0.08, 60)))
+                            .foregroundColor(isDropTargeted ? .blue : .gray)
+                        
+                        Text("Drop FASTQ/FASTA files here")
+                            .font(.system(size: min(geometry.size.width * 0.03, 24)))
+                            .fontWeight(.medium)
+                        
+                        /*
+                         Text("or")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: min(geometry.size.width * 0.02, 18)))
+                        
+                        
+                         Button("Select File") {
+                            isShowingFileImporter = true
+                        }
+                        */
+                        .disabled(fileProcessor.isProcessing)
+                        .font(.system(size: min(geometry.size.width * 0.02, 18)))
                     }
-                    .disabled(fileProcessor.isProcessing)
                 }
+                .padding(geometry.size.width * 0.03)
+                .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers -> Bool in
+                                    guard let provider = providers.first else { return false }
+                                    
+                                    provider.loadObject(ofClass: URL.self) { reading, error in
+                                        DispatchQueue.main.async {
+                                            if let url = reading as? URL {
+                                                fileProcessor.processFile(url: url)
+                                            } else {
+                                                fileProcessor.error = "Could not access the dropped file"
+                                            }
+                                        }
+                                    }
+                                    return true
+                                }
+                
+                // Processing indicator
+                if fileProcessor.isProcessing {
+                    VStack(spacing: geometry.size.height * 0.02) {
+                        ProgressView()
+                            .scaleEffect(min(geometry.size.width * 0.002, 1.5))
+                        Text("Processing \(fileProcessor.stats.filename)...")
+                            .font(.system(size: min(geometry.size.width * 0.02, 18)))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Error display
+                if let error = fileProcessor.error {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.system(size: min(geometry.size.width * 0.02, 18)))
+                        .padding()
+                        .multilineTextAlignment(.center)
+                }
+                
+                // Stats display
+                if fileProcessor.stats.totalSequences > 0 {
+                    StatsView(stats: fileProcessor.stats)
+                        .frame(maxHeight: .infinity)
+                }
+                
+                Spacer()
             }
             .padding()
-            .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers -> Bool in
-                guard let provider = providers.first else { return false }
-                
-                let _ = provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { urlData, _ in
-                    DispatchQueue.main.async {
-                        guard let urlData = urlData as? Data,
-                              let url = URL(dataRepresentation: urlData, relativeTo: nil) else {
-                            fileProcessor.error = "Could not access the dropped file"
-                            return
-                        }
-                        
-                        // Create a copy in the temporary directory
-                        let tempDir = FileManager.default.temporaryDirectory
-                        let tempUrl = tempDir.appendingPathComponent(url.lastPathComponent)
-                        
-                        do {
-                            if FileManager.default.fileExists(atPath: tempUrl.path) {
-                                try FileManager.default.removeItem(at: tempUrl)
-                            }
-                            try FileManager.default.copyItem(at: url, to: tempUrl)
-                            fileProcessor.processFile(url: tempUrl)
-                        } catch {
-                            fileProcessor.error = "Error copying file: \(error.localizedDescription)"
-                        }
-                    }
-                }
-                return true
-            }
-            
-            if fileProcessor.isProcessing {
-                VStack {
-                    ProgressView()
-                        .scaleEffect(1.0)
-                    Text("Processing...")
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            if let error = fileProcessor.error {
-                Text(error)
-                    .foregroundColor(.red)
-                    .padding()
-                    .multilineTextAlignment(.center)
-            }
-            
-            if fileProcessor.stats.totalSequences > 0 {
-                StatsView(stats: fileProcessor.stats)
-            }
-            
-            Spacer()
         }
-        .padding()
-        .frame(minWidth: 400, minHeight: 500)
+        .frame(minWidth: 600, minHeight: 400)
         .fileImporter(
             isPresented: $isShowingFileImporter,
-            allowedContentTypes: [.data],
+            allowedContentTypes: [
+                .plainText,
+                UTType(filenameExtension: "fastq")!,
+                UTType(filenameExtension: "fq")!,
+                UTType(filenameExtension: "fasta")!,
+                UTType(filenameExtension: "fa")!,
+                UTType(filenameExtension: "gz")!
+            ],
             allowsMultipleSelection: false
         ) { result in
             switch result {
@@ -103,32 +110,137 @@ struct ContentView: View {
         }
     }
 }
-
 // MARK: - Stats View
 struct StatsView: View {
     let stats: SequenceStats
+    @Environment(\.colorScheme) var colorScheme // For better color adaptation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Sequence Statistics")
-                .font(.headline)
-                .padding(.bottom, 8)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                StatRow(label: "Total Sequences", value: "\(stats.totalSequences)")
-                StatRow(label: "Total Bases", value: "\(stats.totalBases)")
-                StatRow(label: "GC Content", value: String(format: "%.2f%%", stats.gcContent))
-                StatRow(label: "Average Length", value: String(format: "%.2f", stats.averageLength))
-                StatRow(label: "Longest Sequence", value: "\(stats.longestSequence)")
-                StatRow(label: "Shortest Sequence", value: stats.shortestSequence == Int.max ? "N/A" : "\(stats.shortestSequence)")
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: geometry.size.height * 0.03) {
+                    // Header
+                    Text("Sequence Statistics")
+                        .font(.system(size: min(geometry.size.width * 0.05, 40)))
+                        .fontWeight(.bold)
+                        .padding(.bottom, geometry.size.height * 0.02)
+                    
+                    // Stats Grid
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(minimum: geometry.size.width * 0.3)),
+                            GridItem(.flexible(minimum: geometry.size.width * 0.3))
+                        ],
+                        alignment: .leading,
+                        spacing: geometry.size.height * 0.03
+                    ) {
+                        ResponsiveStatRow(
+                            label: "Filename",
+                            value: stats.filename,
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "Total Sequences",
+                            value: "\(stats.totalSequences)",
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "Total Bases",
+                            value: formatNumber(stats.totalBases),
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "N50",
+                            value: formatNumber(stats.n50),
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "Average Length",
+                            value: formatNumber(Int(stats.averageLength)),
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "Longest Sequence",
+                            value: formatNumber(stats.longestSequence),
+                            geometry: geometry
+                        )
+                        ResponsiveStatRow(
+                            label: "Shortest Sequence",
+                            value: stats.shortestSequence == Int.max ? "N/A" : formatNumber(stats.shortestSequence),
+                            geometry: geometry
+                        )
+                    }
+                }
+                .padding(geometry.size.width * 0.03)
+                .frame(minHeight: geometry.size.height)
+                .background(
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(colorScheme == .dark ? Color(.windowBackgroundColor).opacity(0.3) : Color(.windowBackgroundColor).opacity(0.5))
+                        .shadow(radius: 5)
+                )
+                .padding(geometry.size.width * 0.02)
             }
         }
-        .padding()
-        .background(Color(.windowBackgroundColor).opacity(0.5))
-        .cornerRadius(10)
+    }
+    
+    // Helper function to format large numbers with commas
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 }
 
+// Responsive stat row component
+struct ResponsiveStatRow: View {
+    let label: String
+    let value: String
+    let geometry: GeometryProxy
+    
+    private var fontSize: CGFloat {
+        min(geometry.size.width * 0.025, 24) // Cap the maximum font size
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: geometry.size.height * 0.01) {
+            Text(label)
+                .font(.system(size: fontSize))
+                .foregroundColor(.secondary)
+                .fontWeight(.medium)
+            Text(value)
+                .font(.system(size: fontSize))
+                .fontWeight(.bold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(geometry.size.width * 0.015)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.windowBackgroundColor).opacity(0.3))
+        )
+    }
+}
+
+// Preview provider for testing
+struct StatsView_Previews: PreviewProvider {
+    static var previews: some View {
+        let sampleStats = SequenceStats(
+            filename: "sample.fastq.gz",
+            totalSequences: 1234567,
+            totalBases: 987654321,
+            averageLength: 123.45,
+            longestSequence: 54321,
+            shortestSequence: 12,
+            n50: 45678
+        )
+        
+        StatsView(stats: sampleStats)
+            .frame(width: 800, height: 600)
+            .previewLayout(.fixed(width: 800, height: 600))
+    }
+}
 // MARK: - Stat Row View
 struct StatRow: View {
     let label: String
